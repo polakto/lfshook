@@ -85,3 +85,44 @@ func NewLogger() *logrus.Logger {
 
 ### Note:
 User who run the go application must have read/write permissions to the selected log files. If the files do not exists yet, then user must have permission to the target directory.
+
+### Fork note:
+This fork is able to filter incoming entries by "category" atttribute of entry. By default, all entries are suported. When at least one category for this hook is set up, then every incoming entry is checked for "category" attribute and its value checked if supported.
+#### Usage
+When we want to log all levels but only with "category" attribute set to "statistics", use this code.
+
+```go
+package main
+
+import (
+	"github.com/polakto/lfshook"
+	"github.com/sirupsen/logrus"
+)
+
+var Log *logrus.Logger
+
+// NewLoger terurns new instance of logger
+func NewLogger() *logrus.Logger {
+	if Log != nil {
+		return Log
+	}
+
+	Log = logrus.New()
+
+	pathMap := lfshook.PathMap{
+		logrus.InfoLevel:  "./log/statistics.log",
+		logrus.DebugLevel: "./log/statistics.log",
+		logrus.WarnLevel:  "./log/statistics.log",
+		logrus.ErrorLevel: "./log/statistics.log",
+		logrus.PanicLevel: "./log/statistics.log",
+		logrus.FatalLevel: "./log/statistics.log",
+	}
+	senderSentHook := lfshook.NewHook(
+		pathMap,
+		&logrus.JSONFormatter{},
+	)
+	senderSentHook.AddCategory("statistics")
+	Log.Hooks.Add(senderSentHook)
+	return Log
+}
+```

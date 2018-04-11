@@ -1,15 +1,20 @@
 // Package lfshook is hook for sirupsen/logrus that used for writing the logs to local files.
+//
+// Customisation info - subject of fork
+// Functionality - all entries checked for attribute "category" and compared if this category string in lfsHook.categories
+// When no categories in lfsHook defined, all entries are supported. When at least one in categories map, then only supported entries logged.
 package lfshook
 
 import (
 	"fmt"
-	"github.com/sirupsen/logrus"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
 	"reflect"
 	"sync"
+
+	"github.com/sirupsen/logrus"
 )
 
 // We are logging to file, strip colors to make the output more readable.
@@ -35,6 +40,8 @@ type LfsHook struct {
 	defaultWriter    io.Writer
 	hasDefaultPath   bool
 	hasDefaultWriter bool
+
+	categories map[string]struct{}
 }
 
 // NewHook returns new LFS hook.
@@ -42,7 +49,8 @@ type LfsHook struct {
 // If using io.Writer or WriterMap, user is responsible for closing the used io.Writer.
 func NewHook(output interface{}, formatter logrus.Formatter) *LfsHook {
 	hook := &LfsHook{
-		lock: new(sync.Mutex),
+		lock:       new(sync.Mutex),
+		categories: make(map[string]struct{}),
 	}
 
 	hook.SetFormatter(formatter)
@@ -101,9 +109,20 @@ func (hook *LfsHook) SetDefaultWriter(defaultWriter io.Writer) {
 	hook.hasDefaultWriter = true
 }
 
+// AddCategory adds string name of another supported category to LfsHook.categories.
+// By default, when no category defined, all entries are supported.
+// When at least one category in LfsHook.categories defined, only entries with attribute 'category' are supported.
+func (hook *LfsHook) AddCategory(category string) {
+	hook.categories[category] = struct{}{}
+}
+
 // Fire writes the log file to defined path or using the defined writer.
 // User who run this function needs write permissions to the file or directory if the file does not yet exist.
 func (hook *LfsHook) Fire(entry *logrus.Entry) error {
+	// check if this entry supported
+	if !hook.CategoryCheck(entry) {
+		return nil
+	}
 	if hook.writers != nil || hook.hasDefaultWriter {
 		return hook.ioWrite(entry)
 	} else if hook.paths != nil || hook.hasDefaultPath {
@@ -111,6 +130,22 @@ func (hook *LfsHook) Fire(entry *logrus.Entry) error {
 	}
 
 	return nil
+}
+
+// CategoryCheck checks if provided entry is supported by category
+func (hook *LfsHook) CategoryCheck(entry *logrus.Entry) bool {
+	if len(hook.categories) < 1 {
+		return true
+	}
+	category, ok := entry.Data["category"]
+	if ok == false {
+		return false
+	}
+	_, ok = hook.categories[category.(string)]
+	if ok == false {
+		return false
+	}
+	return true
 }
 
 // Write a log line to an io.Writer.
